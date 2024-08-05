@@ -273,6 +273,7 @@ class RoarCompetitionSolution:
         return control
 
     def get_lookahead_value(self, speed):
+        # Get a certain number of waypoints ahead of vehicle depending on speed
         speed_to_lookahead_dict = {
             70: 12,
             90: 12,
@@ -295,6 +296,7 @@ class RoarCompetitionSolution:
         return num_waypoints
 
     def get_lookahead_index(self, speed):
+        # Get index of last waypoint from get_lookahead_value()
         num_waypoints = self.get_lookahead_value(speed)
         # print("speed " + str(speed) 
         #       + " cur_ind " + str(self.current_waypoint_idx) 
@@ -303,7 +305,8 @@ class RoarCompetitionSolution:
         return (self.current_waypoint_idx + num_waypoints) % len(self.maneuverable_waypoints)
     
     def get_lateral_pid_config(self):
-        conf = {
+        # Choose Kp, Kd, and Ki values based on speed
+        conf = { 
             "30": {
                 "Kp": 1.00,
                 "Kd": 0.03,
@@ -396,8 +399,6 @@ class RoarCompetitionSolution:
             }
         }
         return conf
-
-
 
     # The idea and code for averaging points is from smooth_waypoint_following_local_planner.py
     def next_waypoint_smooth(self, current_speed: float):
@@ -788,7 +789,7 @@ class ThrottleController():
             if len(points) >= len(self.target_distance):   #if the number of poitns is > the intended target distance, break
                 break
 
-        self.dprint("wp dist " +  str(dist))
+        # self.dprint("wp dist " +  str(dist))
         return points # return waypoints
     #returns radius of the curve
     def get_radius(self, wp):
@@ -817,8 +818,6 @@ class ThrottleController():
         # Calculating curvature using Menger curvature formula
         radius = (len_side_1 * len_side_2 * len_side_3) / (4 * math.sqrt(area_squared))
         return radius
-    
-
 
     def get_target_speed(self, radius: float, current_section, current_speed):
         # if the radius of the curve is greater than the max radius, go full speed
