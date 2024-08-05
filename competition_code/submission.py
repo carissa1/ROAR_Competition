@@ -507,23 +507,33 @@ class LatPIDController():
             ]
         )
 
+        # Normalize vectors
         v_vec_normed = v_vec / np.linalg.norm(v_vec)
         w_vec_normed = w_vec / np.linalg.norm(w_vec)
-        error = np.arccos(min(max(v_vec_normed @ w_vec_normed.T, -1), 1)) # makes sure arccos input is between -1 and 1, inclusive
-        _cross = np.cross(v_vec_normed, w_vec_normed)
 
-        if _cross[2] > 0:
+        # Find error as angle between the two vectors
+        error = np.arccos(min(max(v_vec_normed @ w_vec_normed.T, -1), 1)) # makes sure arccos input is between -1 and 1, inclusive
+        
+        # Gets cross-product to find direction of error
+        _cross = np.cross(v_vec_normed, w_vec_normed)
+        if _cross[2] > 0: # if z-component of cross product is positive, error angle is made negative
             error *= -1
+        
+        # Store history of error buffers
         self._error_buffer.append(error)
-        if len(self._error_buffer) >= 2:
+        if len(self._error_buffer) >= 2: # if at least two, get derivative of last two errors and integral of all errors
             _de = (self._error_buffer[-1] - self._error_buffer[-2]) / self._dt
             _ie = sum(self._error_buffer) * self._dt
-        else:
+        else: # otherwise, set both to false
             _de = 0.0
             _ie = 0.0
 
+        # Find k_p, k_d, and k_i values depending on the section
         k_p, k_d, k_i = self.find_k_values(cur_section, current_speed=current_speed, config=self.config)
 
+        # Get pid controller output
+        # np.clip restricts output to self.steering_boundary[0] and [1]
+        # Uses the formula to calculate the pid output and is then converted to a float
         lat_control = float(
             np.clip((k_p * error) + (k_d * _de) + (k_i * _ie), self.steering_boundary[0], self.steering_boundary[1])
         )
