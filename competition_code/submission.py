@@ -10,29 +10,29 @@ import math
 import numpy as np
 import roar_py_interface
 
-#radians
+# Radians
 def normalize_rad(rad : float):
     return (rad + np.pi) % (2 * np.pi) - np.pi
 
-#Distance from one waypoint to another
+# Distance from one waypoint to another
 def distance_p_to_p(p1: roar_py_interface.RoarPyWaypoint, p2: roar_py_interface.RoarPyWaypoint):
     return np.linalg.norm(p2.location[:2] - p1.location[:2])
 
-#sort the waypoints
+# Sort the waypoints
 def filter_waypoints(location : np.ndarray, current_idx: int, waypoints : List[roar_py_interface.RoarPyWaypoint]) -> int:
-    #from current location to closest waypoint
+    # From current location to closest waypoint
     def dist_to_waypoint(waypoint : roar_py_interface.RoarPyWaypoint):
         return np.linalg.norm(
             location[:2] - waypoint.location[:2]
         )
-    #Loop to find closest waypoint
+    # Loop to find closest waypoint
     for i in range(current_idx, len(waypoints) + current_idx):
         if dist_to_waypoint(waypoints[i%len(waypoints)]) < 3:
             return i % len(waypoints)
     return current_idx
 
 
-#create the new waypoint
+# Create the new waypoint
 def new_x_y(x, y):
         new_location = np.array([x, y, 0])
         return roar_py_interface.RoarPyWaypoint(location=new_location, 
@@ -228,7 +228,7 @@ class RoarCompetitionSolution:
             self.maneuverable_waypoints
         )
 
-        # compute and print section timing
+        # Compute and print section timing
         for i, section_ind in enumerate(self.section_indeces):
             if section_ind -2 <= self.current_waypoint_idx \
                 and self.current_waypoint_idx <= section_ind + 2 \
@@ -402,9 +402,9 @@ class RoarCompetitionSolution:
 
     # The idea and code for averaging points is from smooth_waypoint_following_local_planner.py
     def next_waypoint_smooth(self, current_speed: float):
-        if current_speed > 70 and current_speed < 300:
+        if current_speed > 70 and current_speed < 300: # if speeed in (70, 300), average the waypoint
             target_waypoint = self.average_point(current_speed)
-        else:
+        else: # otherwise, just get index of last lookahead waypoint
             new_waypoint_index = self.get_lookahead_index(current_speed)
             target_waypoint = self.maneuverable_waypoints[new_waypoint_index]
         return target_waypoint
@@ -421,17 +421,22 @@ class RoarCompetitionSolution:
             num_points = lookahead_value * 2
             # num_points = lookahead_value
             # num_points = 1
+        
+        # Get middle index from current index to next index
         start_index_for_avg = (next_waypoint_index - (num_points // 2)) % len(self.maneuverable_waypoints)
 
         next_waypoint = self.maneuverable_waypoints[next_waypoint_index]
         next_location = next_waypoint.location
   
+        # Calculate average point from current index to next index
         sample_points = [(start_index_for_avg + i) % len(self.maneuverable_waypoints) for i in range(0, num_points)]
         if num_points > 3:
             location_sum = reduce(lambda x, y: x + y,
                                   (self.maneuverable_waypoints[i].location for i in sample_points))
             num_points = len(sample_points)
-            new_location = location_sum / num_points
+            new_location = location_sum / num_points # new_location is the average between the current index and next index
+            
+            # Get the max_shift_distance based on section
             shift_distance = np.linalg.norm(next_location - new_location)
             max_shift_distance = 2.0
             if self.current_section in [1,2]:
@@ -444,10 +449,13 @@ class RoarCompetitionSolution:
                 max_shift_distance = 0.2
             if self.current_section in [12]:
                 max_shift_distance = 0.4
+
+            # Get midpoint between new_location and next_location and add that * max_shift_distance to next_location
             if shift_distance > max_shift_distance:
                 uv = (new_location - next_location) / shift_distance
                 new_location = next_location + uv*max_shift_distance
 
+            # Create new waypoint
             target_waypoint = roar_py_interface.RoarPyWaypoint(location=new_location, 
                                                                roll_pitch_yaw=np.ndarray([0, 0, 0]), 
                                                                lane_width=0.0)
@@ -457,7 +465,7 @@ class RoarCompetitionSolution:
             #       + " num_points: " + str(num_points) + " start_ind:" + str(start_index_for_avg)
             #       + " curr_speed: " + str(current_speed))
 
-        else:
+        else: # if less than 3 waypoints, just get next waypoint
             target_waypoint =  self.maneuverable_waypoints[next_waypoint_index]
 
         return target_waypoint
@@ -479,18 +487,18 @@ class LatPIDController():
         Returns:
             lat_control
         """
-        # calculate a vector that represent where you are going
+        # Calculate a vector that represent where you are going
         v_begin = vehicle_location
         direction_vector = np.array([
             np.cos(normalize_rad(vehicle_rotation[2])),
             np.sin(normalize_rad(vehicle_rotation[2])),
             0])
-        #find the end of the vector
+        # Find the end of the vector
         v_end = v_begin + direction_vector
-        #finds the actual vector
+        # Finds the actual vector
         v_vec = np.array([(v_end[0] - v_begin[0]), (v_end[1] - v_begin[1]), 0])
         
-        # calculate error projection
+        # Calculate error projection
         w_vec = np.array(
             [
                 next_waypoint.location[0] - v_begin[0],
@@ -534,7 +542,7 @@ class LatPIDController():
     
     def find_k_values(self, cur_section, current_speed: float, config: dict) -> np.array:
         k_p, k_d, k_i = 1, 0, 0
-        #for sections 8,9,10,11, predefined PID values are set
+        # For sections 8,9,10,11, predefined PID values are set
         if cur_section in [8, 9, 10, 11]:
         #   return np.array([0.3, 0.1, 0.25]) # ok for mu=1.2
         #   return np.array([0.2, 0.03, 0.15])
@@ -544,9 +552,10 @@ class LatPIDController():
           return np.array([0.58, 0.05, 0.02]) # 
         # if cur_section in [12]:
         #   return np.array([0.4, 0.05, 0.02]) # 
-        #iterates through config, each item maps a speed upper bound to a set of PID rules
+        
+        # Iterates through config, each item maps a speed upper bound to a set of PID rules
         for speed_upper_bound, kvalues in config.items():
-            #converts speed_upper_bound to a float
+            # Converts speed_upper_bound to a float
             speed_upper_bound = float(speed_upper_bound)
             if current_speed < speed_upper_bound:
                 k_p, k_d, k_i = kvalues["Kp"], kvalues["Kd"], kvalues["Ki"]
@@ -579,7 +588,7 @@ class ThrottleController():
         self.previous_speed = 1.0
         self.brake_ticks = 0
 
-        # for testing how fast the car stops
+        # For testing how fast the car stops
         self.brake_test_counter = 0
         self.brake_test_in_progress = False
 
@@ -587,10 +596,10 @@ class ThrottleController():
         #     print(s)
 
     def run(self, cur_wp_index, waypoints, current_location, current_speed, current_section) -> (float, float, int):
-        self.tick_counter += 1   #keeps track the number of updates
-        #sets throttle and break values 
+        self.tick_counter += 1   # keeps track the number of updates
+        # Sets throttle and break values 
         throttle, brake = self.get_throttle_and_brake(cur_wp_index, current_location, current_speed, current_section, waypoints)
-        #sets gear
+        # Sets gear
         gear = max(1, (int)(current_speed / 60))
         if throttle == -1:
             gear = -1
@@ -599,27 +608,29 @@ class ThrottleController():
         #             + " steer " + str(steering)
         #             + "     loc x,z" + str(self.agent.vehicle.transform.location.x)
         #             + " " + str(self.agent.vehicle.transform.location.z)) 
-        #updates speed for future comparisons
+        
+        # Updates speed for future comparisons
         self.previous_speed = current_speed
-        #if brakes are applied and there are remaining ticks, making sure that it is breaking long enough
+        # If brakes are applied and there are remaining ticks, making sure that it is breaking long enough
         if self.brake_ticks > 0 and brake > 0:
             self.brake_ticks -= 1
 
         # throttle = 0.05 * (100 - current_speed)
         return throttle, brake, gear
-    # determines throttle and break values based on curr speed and layout of the track
+    
+    # Determines throttle and break values based on curr speed and layout of the track
     def get_throttle_and_brake(self, cur_wp_index, current_location, current_speed, current_section, waypoints):
-        #gets a set of waypoints based on curr location
+        # Gets a set of waypoints based on curr location
         wp = self.get_next_interesting_waypoints(current_location, waypoints)
-        #calculates the curvature 
+        # Calculates the curvature 
         r1 = self.get_radius(wp[self.close_index : self.close_index + 3])
         r2 = self.get_radius(wp[self.mid_index : self.mid_index + 3])
         r3 = self.get_radius(wp[self.far_index : self.far_index + 3])
-        #computes target speed for each section 
+        # Computes target speed for each section 
         target_speed1 = self.get_target_speed(r1, current_section, current_speed)
         target_speed2 = self.get_target_speed(r2, current_section, current_speed)
         target_speed3 = self.get_target_speed(r3, current_section, current_speed)
-        #calculates distances and target speeds for different points
+        # Calculates distances and target speeds for different points
         close_distance = self.target_distance[self.close_index] + 3
         mid_distance = self.target_distance[self.mid_index]
         far_distance = self.target_distance[self.far_index]
@@ -627,13 +638,13 @@ class ThrottleController():
         speed_data.append(self.speed_for_turn(close_distance, target_speed1, current_speed))
         speed_data.append(self.speed_for_turn(mid_distance, target_speed2, current_speed))
         speed_data.append(self.speed_for_turn(far_distance, target_speed3, current_speed))
-        #calculates additional target speed for a wider turn (larger segment of waypoints)
+        # Calculates additional target speed for a wider turn (larger segment of waypoints)
         if current_speed > 100:
-            # at high speed use larger spacing between points to look further ahead and detect wide turns.
+            # At high speed use larger spacing between points to look further ahead and detect wide turns
             r4 = self.get_radius([wp[self.close_index], wp[self.close_index+3], wp[self.close_index+6]])
             target_speed4 = self.get_target_speed(r4, current_section, current_speed)
             speed_data.append(self.speed_for_turn(close_distance, target_speed4, current_speed))
-        #selects optimal speed  
+        # Selects optimal speed  
         update = self.select_speed(speed_data)
         
         # self.print_speed(" -- SPEED: ", 
@@ -642,14 +653,13 @@ class ThrottleController():
         #                  speed_data[2].recommended_speed_now,
         #                  (0 if len(speed_data) < 4 else speed_data[3].recommended_speed_now), 
         #                  current_speed)
-        #determines the throttle and break values 
+        # Determines the throttle and break values 
         t, b = self.speed_data_to_throttle_and_brake(update)
-        #debugging print
+        # Debugging print
         # self.dprint("--- (" + str(cur_wp_index) + ") throt " + str(t) + " brake " + str(b) + "---")
         return t, b
     
-    # gets throttle and brake values based on current speed data, adjuests speed accordingly
-
+    # Gets throttle and brake values based on current speed data, adjuests speed accordingly
     def speed_data_to_throttle_and_brake(self, speed_data: SpeedData):
         percent_of_max = speed_data.current_speed / speed_data.recommended_speed_now
 
@@ -658,15 +668,15 @@ class ThrottleController():
         #             + " maxs= " + str(round(speed_data.recommended_speed_now, 2)) + " pcnt= " + str(round(percent_of_max, 2)))
         # calculates ratio of curr_speed to recommended speed
         percent_change_per_tick = 0.07 # speed drop for one time-tick of braking
-        speed_up_threshold = 0.99  #deciding when to speed up
+        speed_up_threshold = 0.99  # deciding when to speed up
         throttle_decrease_multiple = 0.7  
         throttle_increase_multiple = 1.25
         percent_speed_change = (speed_data.current_speed - self.previous_speed) / (self.previous_speed + 0.0001) # avoid division by zero
 
         if percent_of_max > 1:   # curr speed > recommended speed, function considers breaking
             # Consider slowing down
-            #checks if it should break based on the difference between perent_of_max and percent-change_per_tick
-            #if speed is dropping fast, it reduces breaking and may apply throttle
+            # Checks if it should break based on the difference between perent_of_max and percent-change_per_tick
+            # If speed is dropping fast, it reduces breaking and may apply throttle
             brake_threshold_multiplier = 1.0
             if speed_data.current_speed > 200:
                 brake_threshold_multiplier = 1.0
@@ -674,25 +684,25 @@ class ThrottleController():
                 if self.brake_ticks > 0:
                     # self.dprint("tb: tick" + str(self.tick_counter) + " brake: counter" + str(self.brake_ticks))
                     return -1, 1
-                # if speed is not decreasing fast, hit the brake.
+                # If speed is not decreasing fast, hit the brake.
                 if self.brake_ticks <= 0 and not self.speed_dropping_fast(percent_change_per_tick, speed_data.current_speed):
-                    # start braking, and set for how many ticks to brake
+                    # Start braking, and set for how many ticks to brake
                     self.brake_ticks = math.floor((percent_of_max - 1) / percent_change_per_tick)
                     # TODO: try 
                     # self.brake_ticks = 1, or (1 or 2 but not more)
                     # self.dprint("tb: tick" + str(self.tick_counter) + " brake: initiate counter" + str(self.brake_ticks))
                     return -1, 1
                 else:
-                    # speed is already dropping fast, ok to throttle because the effect of throttle is delayed
+                    # Speed is already dropping fast, ok to throttle because the effect of throttle is delayed
                     # self.dprint("tb: tick" + str(self.tick_counter) + " brake: throttle early1: sp_ch=" + str(percent_speed_change))
                     self.brake_ticks = 0 # done slowing down. clear brake_ticks
                     return 1, 0
             else:
-                #if speed is dropping rapidly it applies full throttle
-                # if speed is below speed_up_threshold, applies full throttle
-                #otherwise, it calculates the throttle needed to maintain the curr speed and adjusts accordingly
+                # If speed is dropping rapidly it applies full throttle
+                # If speed is below speed_up_threshold, applies full throttle
+                # Otherwise, it calculates the throttle needed to maintain the curr speed and adjusts accordingly
                 if self.speed_dropping_fast(percent_change_per_tick, speed_data.current_speed):
-                    # speed is already dropping fast, ok to throttle because the effect of throttle is delayed
+                    # Speed is already dropping fast, ok to throttle because the effect of throttle is delayed
                     # self.dprint("tb: tick" + str(self.tick_counter) + " brake: throttle early2: sp_ch=" + str(percent_speed_change))
                     self.brake_ticks = 0 # done slowing down. clear brake_ticks
                     return 1, 0
@@ -707,7 +717,7 @@ class ThrottleController():
             self.brake_ticks = 0 # done slowing down. clear brake_ticks
             # Consider speeding up
             if self.speed_dropping_fast(percent_change_per_tick, speed_data.current_speed):
-                # speed is dropping fast, ok to throttle because the effect of throttle is delayed
+                # Speed is dropping fast, ok to throttle because the effect of throttle is delayed
                 # self.dprint("tb: tick" + str(self.tick_counter) + " throttle: full speed drop: sp_ch=" + str(percent_speed_change))
                 return 1, 0
             if percent_of_max < speed_up_threshold:
@@ -721,16 +731,16 @@ class ThrottleController():
                 # self.dprint("tb: tick" + str(self.tick_counter) + " throttle maintain: sp_ch=" + str(percent_speed_change))
                 return throttle_to_maintain, 0
 
-    # used to detect when speed is dropping due to brakes applied earlier. speed delta has a steep negative slope.
+    # Used to detect when speed is dropping due to brakes applied earlier. speed delta has a steep negative slope.
     def speed_dropping_fast(self, percent_change_per_tick: float, current_speed):
         percent_speed_change = (current_speed - self.previous_speed) / (self.previous_speed + 0.0001) # avoid division by zero
         return percent_speed_change < (-percent_change_per_tick / 2)
-    #could improve
-    # find speed_data with smallest recommended speed
+    # Could improve
+    # Find speed_data with smallest recommended speed
     def select_speed(self, speed_data: [SpeedData]):
-        min_speed = 1000  #uses high value as comparison to make sure that actual speeds will be lower
+        min_speed = 1000  # uses high value as comparison to make sure that actual speeds will be lower
         index_of_min_speed = -1
-        #finding minimum speed 
+        # Finding minimum speed 
         for i, sd in enumerate(speed_data):
             if sd.recommended_speed_now < min_speed:
                 min_speed = sd.recommended_speed_now
@@ -741,59 +751,57 @@ class ThrottleController():
         else:
             return speed_data[0]
         
-    # calculate throttle value to maintain given speed
+    # Calculate throttle value to maintain given speed
     def get_throttle_to_maintain_speed(self, current_speed: float):
         throttle = 0.6 + current_speed/1000
         return throttle
 
-        #calculates max achievable speed for vehicle in given distance 
-
+    # Calculates max achievable speed for vehicle in given distance 
     def speed_for_turn(self, distance: float, target_speed: float, current_speed: float):
         d = (1/675) * (target_speed**2) + distance
         max_speed = math.sqrt(675 * d)
         return SpeedData(distance, current_speed, target_speed, max_speed)
 
-
-    # calculates max speed a vehicle can achieve after traveling specified distance (break, acceleration)
+    # Calculates max speed a vehicle can achieve after traveling specified distance (break, acceleration)
     def speed_for_turn_fix_physics(self, distance: float, target_speed: float, current_speed: float):
-        # fix physics
+        # Fix physics
         braking_decceleration = 66.0 # try 11, 14, 56
-        #sets max speed for turning
+        # Sets max speed for turning
         max_speed = math.sqrt((target_speed**2) + 2 * distance * (braking_decceleration + 9.81))
         return SpeedData(distance, current_speed, target_speed, max_speed)
 
     def get_next_interesting_waypoints(self, current_location, more_waypoints):
-        # return a list of points with distances approximately as given 
+        # Return a list of points with distances approximately as given 
         # in intended_target_distance[] from the current location.
         points = [] # store waypoints
         dist = [] # for debugging
-        #get the starting waypoint
+        # Get the starting waypoint
         start = roar_py_interface.RoarPyWaypoint(current_location, np.ndarray([0, 0, 0]), 0.0)
         # start = self.agent.vehicle.transform
         points.append(start)  
         curr_dist = 0  # keeps track of total distancec
-        num_points = 0   #keeps track of waypoints
-        for p in more_waypoints:  #go through the waypoints
-            end = p   #set end to current waypoint
-            num_points += 1  #increment number of waypoints passed
+        num_points = 0   # keeps track of waypoints
+        for p in more_waypoints:  # go through the waypoints
+            end = p   # set end to current waypoint
+            num_points += 1  # increment number of waypoints passed
             # print("start " + str(start) + "\n- - - - -\n")
             # print("end " + str(end) +     "\n- - - - -\n")
-            curr_dist += distance_p_to_p(start, end)  #calculate distance from start to end and add to currdistance
+            curr_dist += distance_p_to_p(start, end)  # calculate distance from start to end and add to currdistance
             # curr_dist += start.location.distance(end.location)
-            # if curr distance is > the intended target distance for next point
+            # If curr distance is > the intended target distance for next point
             if curr_dist > self.intended_target_distance[len(points)]:
-                self.target_distance[len(points)] = curr_dist  #update target distance
-                points.append(end)  #store waypoint end
-                dist.append(curr_dist)  #add distance 
-            start = end  #update the new start
-            if len(points) >= len(self.target_distance):   #if the number of poitns is > the intended target distance, break
+                self.target_distance[len(points)] = curr_dist  # update target distance
+                points.append(end)  # store waypoint end
+                dist.append(curr_dist)  # add distance 
+            start = end  # update the new start
+            if len(points) >= len(self.target_distance):   # if the number of points is > the intended target distance, break
                 break
 
         # self.dprint("wp dist " +  str(dist))
         return points # return waypoints
-    #returns radius of the curve
+    # Returns radius of the curve
     def get_radius(self, wp):
-        #gets the points of the 3 closest waypoints
+        # Gets the points of the 3 closest waypoints
         point1 = (wp[0].location[0], wp[0].location[1])
         point2 = (wp[1].location[0], wp[1].location[1])
         point3 = (wp[2].location[0], wp[2].location[1])
@@ -802,7 +810,8 @@ class ThrottleController():
         len_side_1 = round( math.dist(point1, point2), 3)
         len_side_2 = round( math.dist(point2, point3), 3)
         len_side_3 = round( math.dist(point1, point3), 3)
-        #If one of the sides is < small_num, the points are close together (degenerate triangle) so it returns max radius
+        
+        # If one of the sides is < small_num, the points are close together (degenerate triangle) so it returns max radius
         small_num = 0.01
         if len_side_1 < small_num or len_side_2 < small_num or len_side_3 < small_num:
             return self.max_radius
@@ -812,7 +821,7 @@ class ThrottleController():
 
         # Calculating area using Herons formula
         area_squared = sp * (sp - len_side_1) * (sp - len_side_2) * (sp - len_side_3)
-        #if the area is less than small_num that means that the turn is really small (collinear points)
+        # If the area is less than small_num that means that the turn is really small (collinear points)
         if area_squared < small_num:
             return self.max_radius
         # Calculating curvature using Menger curvature formula
@@ -820,12 +829,12 @@ class ThrottleController():
         return radius
 
     def get_target_speed(self, radius: float, current_section, current_speed):
-        # if the radius of the curve is greater than the max radius, go full speed
+        # If the radius of the curve is greater than the max radius, go full speed
         if radius >= self.max_radius:
             return self.max_speed
         #self.section_indeces = [198, 438, 547, 691, 803, 884, 1287, 1508, 1854, 1968, 2264, 2662, 2770]
         #old section indeces = [0, 277, 554, 831, 1108, 1662, 1939, 2216, 2493]
-        # sets the frictino components for each section
+        # Sets the friction components for each section
         mu = 2.5
         if current_section == 0:
             mu = 1
@@ -862,9 +871,9 @@ class ThrottleController():
             mu = 1.5
         if current_section == 9:
             mu = 1.5'''
-        # sets the target speed using formula. sqrt(friction * gravity(9.81) * radius of curve ) * unit conversion (3.6)
+        # Sets the target speed using formula. sqrt(friction * gravity(9.81) * radius of curve ) * unit conversion (3.6)
         target_speed = math.sqrt(mu*9.81*radius) * 3.6
-        #makes sure that the target speed is between 20 - maxspeed so it doesnt go too fast
+        # Makes sure that the target speed is between 20 - maxspeed so it doesnt go too fast
         return max(20, min(target_speed, self.max_speed))  # clamp between 20 and max_speed
 
 
