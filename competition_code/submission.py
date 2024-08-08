@@ -9,6 +9,7 @@ from typing import List, Tuple, Dict, Optional
 import math
 import numpy as np
 import roar_py_interface
+from improved_waypoints import TOTAL_WAYPOINTS
 
 # Radians
 def normalize_rad(rad : float):
@@ -61,10 +62,11 @@ class RoarCompetitionSolution:
         # self.maneuverable_waypoints = \
         #     maneuverable_waypoints[:startInd_8] + SEC_8_WAYPOINTS \
         #         + maneuverable_waypoints[endInd_8:] 
-        self.maneuverable_waypoints = \
-            maneuverable_waypoints[:startInd_8] + SEC_8_WAYPOINTS \
-                + maneuverable_waypoints[endInd_8:startInd_12] \
-                + SEC_12_WAYPOINTS
+        # self.maneuverable_waypoints = \
+        #     maneuverable_waypoints[:startInd_8] + SEC_8_WAYPOINTS \
+        #         + maneuverable_waypoints[endInd_8:startInd_12] \
+        #         + SEC_12_WAYPOINTS # 354.00
+        self.maneuverable_waypoints = TOTAL_WAYPOINTS # 351
         # self.maneuverable_waypoints = self.modified_points(maneuverable_waypoints)
         
         self.vehicle = vehicle
@@ -86,7 +88,8 @@ class RoarCompetitionSolution:
         #indexes_per_section = len(self.maneuverable_waypoints) // num_sections
         #self.section_indeces = [indexes_per_section * i for i in range(0, num_sections)]
         # self.section_indeces = [198, 438, 547, 691, 803, 884, 1287, 1508, 1854, 1968, 2264, 2662, 2770]
-        self.section_indeces = [198, 438, 547, 691, 803, 884, 1287, 1508, 1854, 1968, 2264, 2592, 2770]
+        # self.section_indeces = [198, 438, 547, 691, 803, 884, 1287, 1508, 1854, 1968, 2264, 2592, 2770]
+        self.section_indeces = [198, 438, 547, 691, 803, 893, 1287, 1508, 1854, 1968, 2264, 2592, 2779]
         print(f"1 lap length: {len(self.maneuverable_waypoints)}")
         print(f"indexes: {self.section_indeces}")
 
@@ -847,19 +850,22 @@ class ThrottleController():
         # Sets the friction components for each section
         mu = 2.5
         if current_section == 0:
-            mu = 1
+            mu = 1.7
+            # mu = 1
         if current_section == 1:
             mu = 2.0
         if current_section == 2:
             mu = 1.95
         if current_section == 3:
-            mu = 1
+            mu = 2
+            # mu = 1
         if current_section == 4:
             mu = 3.25
         if current_section == 5:
             mu = 3.4
         if current_section == 6:
-            mu = 1.95
+            mu = 2.6
+            # mu = 1.95
         if current_section == 7:
             mu = 0.5
         # if current_section == 7 and current_speed<150:
@@ -871,7 +877,8 @@ class ThrottleController():
         if current_section == 10:
             mu = 3.8
         if current_section == 11:
-            mu = 1.9
+            mu = 2.2
+            # mu = 1.9
         if current_section == 12:
             mu = 1.9
         '''old friction coefficients (goes with old sections): 
